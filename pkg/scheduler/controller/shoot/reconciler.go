@@ -565,6 +565,45 @@ func determineCandidatesWithMinimalDistanceStrategy(log logr.Logger, shoot *gard
 	return candidates, nil
 }
 
+// TODO: This is not yet wired into applyStrategy
+// determineCandidatesWithMinimalCostStrategy chooses the seeds with the minimal cost, treating cost as the distance metric.
+// Seeds whose cost cannot be resolved are kept as a last resort (ranked as most expensive) so scheduling never dead-ends on sparse pricing data
+func determineCandidatesWithMinimalCostStrategy(ctx context.Context, log logr.Logger, shoot *gardencorev1beta1.Shoot, seedList []gardencorev1beta1.Seed, provider SeedCostProvider) ([]gardencorev1beta1.Seed, error) {
+	// Defensive guard: without a provider we cannot rank by cost, so keep all seeds.
+	if provider == nil {
+		return nil, fmt.Errorf("SeedCostProvider must not be nil")
+	}
+
+	var (
+		candidates []gardencorev1beta1.Seed
+		minCost    = math.MaxInt32
+	)
+
+	for _, seed := range seedList {
+		cost, known, err := provider.GetSeedCost(ctx, &seed)
+		if err != nil {
+			log.Info("Failed to resolve cost for seed, skipping it as a candidate", "seedName", seed.Name, "shootRegion", shoot.Spec.Region, "err", err.Error())
+			continue
+		}
+		// Treat unknown cost as most expensive so such seeds only win when nothing priced exists.
+		if !known {
+			cost = math.MaxInt32
+		}
+
+		if cost == minCost {
+			candidates = append(candidates, seed)
+			continue
+		}
+
+		if cost < minCost {
+			minCost = cost
+			candidates = []gardencorev1beta1.Seed{seed}
+		}
+	}
+
+	return candidates, nil
+}
+
 func regionConfigMinimalDistance(log logr.Logger, seeds []gardencorev1beta1.Seed, shoot *gardencorev1beta1.Shoot, regionConfig *corev1.ConfigMap) ([]gardencorev1beta1.Seed, error) {
 	var candidates []gardencorev1beta1.Seed
 

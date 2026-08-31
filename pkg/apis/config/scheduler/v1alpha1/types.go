@@ -14,6 +14,8 @@ const (
 	SameRegion CandidateDeterminationStrategy = "SameRegion"
 	// MinimalDistance Strategy determines a seed candidate for a shoot if the cloud profile are identical. Then chooses the seed with the minimal distance to the shoot.
 	MinimalDistance CandidateDeterminationStrategy = "MinimalDistance"
+	// MinimalCost Strategy determines a seed candidate for a shoot if the cloud profile are identical. Then chooses the seed with the minimal cost, using cost as the distance metric.
+	MinimalCost CandidateDeterminationStrategy = "MinimalCost"
 	// Default Strategy is the default strategy to use when there is no configuration provided
 	Default = SameRegion
 	// SchedulerDefaultLockObjectNamespace is the default lock namespace for leader election.
@@ -23,7 +25,7 @@ const (
 )
 
 // Strategies defines all currently implemented SeedCandidateDeterminationStrategies
-var Strategies = []CandidateDeterminationStrategy{SameRegion, MinimalDistance}
+var Strategies = []CandidateDeterminationStrategy{SameRegion, MinimalDistance, MinimalCost}
 
 // CandidateDeterminationStrategy defines how seeds for shoots, that do not specify a seed explicitly, are being determined
 type CandidateDeterminationStrategy string
