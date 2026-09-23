@@ -203,7 +203,7 @@ func (r *Reconciler) DetermineSeed(
 	if err != nil {
 		return nil, err
 	}
-	return getSeedWithLeastShootsDeployed(filteredSeeds, shootList)
+	return getSeedWithLowestUtilization(filteredSeeds, shootList)
 }
 
 func isUsableSeed(seed *gardencorev1beta1.Seed) bool {
@@ -499,18 +499,27 @@ func filterCandidates(shoot *gardencorev1beta1.Shoot, shootList []*gardencorev1b
 	return candidates, nil
 }
 
-// getSeedWithLeastShootsDeployed finds the best candidate (i.e. the one managing the smallest number of shoots right now).
-func getSeedWithLeastShootsDeployed(seedList []gardencorev1beta1.Seed, shootList []*gardencorev1beta1.Shoot) (*gardencorev1beta1.Seed, error) {
+// getSeedWithLowestUtilization finds the best candidate by lowest relative utilization.
+// Seeds without an allocatable limit are scored by absolute count as a fallback, and are always considered less loaded than seeds with a limit.
+func getSeedWithLowestUtilization(seedList []gardencorev1beta1.Seed, shootList []*gardencorev1beta1.Shoot) (*gardencorev1beta1.Seed, error) {
 	var (
 		bestCandidate gardencorev1beta1.Seed
-		minCount      *int
+		minScore      = math.MaxFloat64
 		seedUsage     = v1beta1helper.CalculateSeedUsage(shootList)
 	)
 
 	for _, seed := range seedList {
-		if numberOfManagedShoots := seedUsage[seed.Name]; minCount == nil || numberOfManagedShoots < *minCount {
+		used := seedUsage[seed.Name]
+		var score float64
+		if allocatable, ok := seed.Status.Allocatable[gardencorev1beta1.ResourceShoots]; ok && allocatable.Value() > 0 {
+			score = float64(used) / float64(allocatable.Value())
+		} else {
+			// No capacity limit known: treat as lightly loaded but rank among themselves by absolute count.
+			score = -1 + float64(used)/math.MaxFloat32
+		}
+		if score < minScore {
 			bestCandidate = seed
-			minCount = &numberOfManagedShoots
+			minScore = score
 		}
 	}
 
